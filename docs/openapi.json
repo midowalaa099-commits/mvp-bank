@@ -1,0 +1,1435 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "MVP Bank API",
+    "version": "1.0.0",
+    "description": "Simulated banking API with Laravel and MySQL. Initially EGP; architecture supports multiple currencies, with same-currency transfers only. Authenticate with bearer tokens. All protected routes share a 60-request-per-user-per-minute limit. No real funds or external payment provider. Responses containing user or banking data use Cache-Control: no-store. Public references are UUIDs."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000/api/v1",
+      "description": "Local development"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health"
+    },
+    {
+      "name": "Authentication"
+    },
+    {
+      "name": "Accounts"
+    },
+    {
+      "name": "Money"
+    },
+    {
+      "name": "Transactions"
+    },
+    {
+      "name": "Administration"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Application health response",
+        "tags": [
+          "Health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Application is responding.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "description": "Checks application responsiveness only; does not verify database connectivity."
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "operationId": "register",
+        "summary": "Register a customer and issue a 24-hour bearer token",
+        "tags": [
+          "Authentication"
+        ],
+        "responses": {
+          "201": {
+            "description": "Register a customer and issue a 24-hour bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        },
+        "description": "Email is normalized to lowercase. Role input is prohibited; public registration always creates a customer. Limit: 5 requests per IP per minute."
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "login",
+        "summary": "Log in and issue a 24-hour bearer token",
+        "tags": [
+          "Authentication"
+        ],
+        "responses": {
+          "200": {
+            "description": "Log in and issue a 24-hour bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "description": "Email is normalized to lowercase. Unknown email and wrong password return the same 401 message. Limits: 5 requests per email/IP per minute, plus 30 per IP."
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "currentUser",
+        "summary": "Get the current user",
+        "tags": [
+          "Authentication"
+        ],
+        "responses": {
+          "200": {
+            "description": "Get the current user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "Revoke the current token",
+        "tags": [
+          "Authentication"
+        ],
+        "responses": {
+          "204": {
+            "description": "Revoke the current token"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          }
+        },
+        "description": "Other device tokens remain valid. Response has no body."
+      }
+    },
+    "/accounts": {
+      "get": {
+        "operationId": "listAccounts",
+        "summary": "List accessible accounts",
+        "tags": [
+          "Accounts"
+        ],
+        "responses": {
+          "200": {
+            "description": "List accessible accounts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          }
+        ],
+        "description": "Customers see their own accounts; admins see all accounts. Ordered by newest internal ID."
+      },
+      "post": {
+        "operationId": "openAccount",
+        "summary": "Open a zero-balance account",
+        "tags": [
+          "Accounts"
+        ],
+        "responses": {
+          "201": {
+            "description": "Open a zero-balance account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenAccountRequest"
+              }
+            }
+          }
+        },
+        "description": "Customers only. One account per customer per currency. Ownership, balance, and status input are prohibited."
+      }
+    },
+    "/accounts/{account}": {
+      "get": {
+        "operationId": "getAccount",
+        "summary": "Get account balance and status",
+        "tags": [
+          "Accounts"
+        ],
+        "responses": {
+          "200": {
+            "description": "Get account balance and status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AccountReference"
+          }
+        ]
+      }
+    },
+    "/accounts/{account}/deposits": {
+      "post": {
+        "operationId": "deposit",
+        "summary": "Create a deposit operation",
+        "tags": [
+          "Money"
+        ],
+        "responses": {
+          "201": {
+            "description": "Create a deposit operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "200": {
+            "description": "Matching retry; original receipt returned without moving money again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AccountReference"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoneyRequest"
+              }
+            }
+          }
+        },
+        "description": "Customer must own the account; admins cannot move customer money. All affected accounts must be active. Transfers require a distinct destination in the same currency. Deposits are simulated. Amounts and receipts are decimal strings. Currency input is prohibited; destination input is prohibited for deposits/withdrawals. The balance changes and receipt commit atomically. An authorized matching retry returns the original receipt, even after a freeze. Equivalent decimal representations match. Failed operations do not reserve the key."
+      }
+    },
+    "/accounts/{account}/withdrawals": {
+      "post": {
+        "operationId": "withdraw",
+        "summary": "Create a withdraw operation",
+        "tags": [
+          "Money"
+        ],
+        "responses": {
+          "201": {
+            "description": "Create a withdraw operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "200": {
+            "description": "Matching retry; original receipt returned without moving money again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AccountReference"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoneyRequest"
+              }
+            }
+          }
+        },
+        "description": "Customer must own the account; admins cannot move customer money. All affected accounts must be active. Transfers require a distinct destination in the same currency. Deposits are simulated. Amounts and receipts are decimal strings. Currency input is prohibited; destination input is prohibited for deposits/withdrawals. The balance changes and receipt commit atomically. An authorized matching retry returns the original receipt, even after a freeze. Equivalent decimal representations match. Failed operations do not reserve the key."
+      }
+    },
+    "/accounts/{account}/transfers": {
+      "post": {
+        "operationId": "transfer",
+        "summary": "Create a transfer operation",
+        "tags": [
+          "Money"
+        ],
+        "responses": {
+          "201": {
+            "description": "Create a transfer operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "200": {
+            "description": "Matching retry; original receipt returned without moving money again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AccountReference"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferRequest"
+              }
+            }
+          }
+        },
+        "description": "Customer must own the account; admins cannot move customer money. All affected accounts must be active. Transfers require a distinct destination in the same currency. Deposits are simulated. Amounts and receipts are decimal strings. Currency input is prohibited; destination input is prohibited for deposits/withdrawals. The balance changes and receipt commit atomically. An authorized matching retry returns the original receipt, even after a freeze. Equivalent decimal representations match. Failed operations do not reserve the key."
+      }
+    },
+    "/accounts/{account}/transactions": {
+      "get": {
+        "operationId": "accountTransactions",
+        "summary": "List incoming and outgoing account history",
+        "tags": [
+          "Transactions"
+        ],
+        "responses": {
+          "200": {
+            "description": "List incoming and outgoing account history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AccountReference"
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          }
+        ],
+        "description": "Newest first by creation time, then internal ID. Caller must be allowed to view the account."
+      }
+    },
+    "/transactions": {
+      "get": {
+        "operationId": "listTransactions",
+        "summary": "List accessible transactions",
+        "tags": [
+          "Transactions"
+        ],
+        "responses": {
+          "200": {
+            "description": "List accessible transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          }
+        ],
+        "description": "Customers see operations involving their accounts, including incoming transfers. Admins see all. Newest first by creation time, then internal ID."
+      }
+    },
+    "/transactions/{transaction}": {
+      "get": {
+        "operationId": "getTransaction",
+        "summary": "Get a transaction receipt",
+        "tags": [
+          "Transactions"
+        ],
+        "responses": {
+          "200": {
+            "description": "Get a transaction receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TransactionReference"
+          }
+        ]
+      }
+    },
+    "/admin/accounts/{account}/freeze": {
+      "post": {
+        "operationId": "freezeAccount",
+        "summary": "Freeze an account",
+        "tags": [
+          "Administration"
+        ],
+        "responses": {
+          "200": {
+            "description": "Freeze an account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AccountReference"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountStatusRequest"
+              }
+            }
+          }
+        },
+        "description": "Admins only. Status change and immutable audit record commit together under an account lock. A reason is required. Repeating the current status succeeds without another audit row. A frozen account cannot send or receive money; existing records remain readable."
+      }
+    },
+    "/admin/accounts/{account}/unfreeze": {
+      "post": {
+        "operationId": "unfreezeAccount",
+        "summary": "Unfreeze an account",
+        "tags": [
+          "Administration"
+        ],
+        "responses": {
+          "200": {
+            "description": "Unfreeze an account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AccountReference"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountStatusRequest"
+              }
+            }
+          }
+        },
+        "description": "Admins only. Status change and immutable audit record commit together under an account lock. A reason is required. Repeating the current status succeeds without another audit row. A frozen account cannot send or receive money; existing records remain readable."
+      }
+    },
+    "/admin/accounts/{account}/status-changes": {
+      "get": {
+        "operationId": "accountStatusChanges",
+        "summary": "List account status audit history",
+        "tags": [
+          "Administration"
+        ],
+        "responses": {
+          "200": {
+            "description": "List account status audit history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountStatusChangePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AccountReference"
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          }
+        ],
+        "description": "Admins only. Ordered by newest internal ID. Lists actual status changes, including actor and reason."
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Sanctum token from registration or login; expires after 24 hours."
+      }
+    },
+    "parameters": {
+      "AccountReference": {
+        "name": "account",
+        "in": "path",
+        "required": true,
+        "description": "Public account UUID, not the internal numeric ID.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "TransactionReference": {
+        "name": "transaction",
+        "in": "path",
+        "required": true,
+        "description": "Public transaction UUID.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "Page": {
+        "name": "page",
+        "in": "query",
+        "required": false,
+        "description": "Results contain 25 records per page.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Case-sensitive key shared across all money operations by the same customer. Reuse only to retry the same operation.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._:-]+$",
+          "example": "payment-001"
+        }
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255,
+            "example": "customer@example.com"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "customer",
+              "admin"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "role"
+        ]
+      },
+      "Account": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "currency": {
+            "type": "string",
+            "example": "EGP"
+          },
+          "balance": {
+            "type": "string",
+            "example": "125.50",
+            "description": "Decimal string; currency precision, never a floating-point number."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "frozen"
+            ]
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Included only for admins."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "reference",
+          "currency",
+          "balance",
+          "status",
+          "created_at"
+        ]
+      },
+      "Transaction": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "deposit",
+              "withdrawal",
+              "transfer"
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "example": "EGP"
+          },
+          "amount": {
+            "type": "string",
+            "example": "125.50"
+          },
+          "source_account": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "destination_account": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "reference",
+          "type",
+          "currency",
+          "amount",
+          "source_account",
+          "destination_account",
+          "created_at"
+        ]
+      },
+      "AccountStatusChange": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "from_status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "frozen"
+            ]
+          },
+          "to_status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "frozen"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "performed_by": {
+            "$ref": "#/components/schemas/User"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "from_status",
+          "to_status",
+          "reason",
+          "performed_by",
+          "created_at"
+        ]
+      },
+      "Authentication": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          },
+          "access_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ]
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "user",
+          "access_token",
+          "token_type",
+          "expires_at"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "ValidationError": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "message",
+          "errors"
+        ]
+      },
+      "Amount": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+        "example": "125.50",
+        "description": "Positive decimal string without signs, leading zeroes, or exponents. Must match account currency precision (at most 2 decimals for EGP) and fit 9223372036854775807 minor units. Zero is rejected."
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255,
+            "example": "customer@example.com"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true,
+            "description": "At most 72 UTF-8 bytes; null characters are rejected.",
+            "minLength": 12
+          },
+          "password_confirmation": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true,
+            "description": "Must match password."
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "password",
+          "password_confirmation"
+        ]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255,
+            "example": "customer@example.com"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true,
+            "description": "At most 72 UTF-8 bytes; null characters are rejected."
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "OpenAccountRequest": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "example": "EGP",
+            "description": "Existing currency code; normalized to uppercase."
+          }
+        },
+        "required": [
+          "currency"
+        ]
+      },
+      "MoneyRequest": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Amount"
+          }
+        },
+        "required": [
+          "amount"
+        ]
+      },
+      "TransferRequest": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "destination_account": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "amount",
+          "destination_account"
+        ]
+      },
+      "AccountStatusRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500,
+            "example": "Account review requested"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "PaginationLinks": {
+        "type": "object",
+        "properties": {
+          "first": {
+            "type": "string",
+            "nullable": true
+          },
+          "last": {
+            "type": "string",
+            "nullable": true
+          },
+          "prev": {
+            "type": "string",
+            "nullable": true
+          },
+          "next": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "first",
+          "last",
+          "prev",
+          "next"
+        ]
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "properties": {
+          "current_page": {
+            "type": "integer"
+          },
+          "from": {
+            "type": "integer",
+            "nullable": true
+          },
+          "last_page": {
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          },
+          "per_page": {
+            "type": "integer",
+            "enum": [
+              25
+            ]
+          },
+          "to": {
+            "type": "integer",
+            "nullable": true
+          },
+          "total": {
+            "type": "integer"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "label": {
+                  "type": "string"
+                },
+                "active": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "url",
+                "label",
+                "active"
+              ]
+            }
+          }
+        },
+        "required": [
+          "current_page",
+          "from",
+          "last_page",
+          "path",
+          "per_page",
+          "to",
+          "total",
+          "links"
+        ]
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "AccountResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Account"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "TransactionResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Transaction"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "AccountStatusChangeResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AccountStatusChange"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "AuthenticationResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Authentication"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "AccountPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Account"
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ]
+      },
+      "TransactionPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Transaction"
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ]
+      },
+      "AccountStatusChangePage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountStatusChange"
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "links",
+          "meta"
+        ]
+      }
+    },
+    "responses": {
+      "Error401": {
+        "description": "Missing, invalid, or expired bearer token; also incorrect login credentials.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error403": {
+        "description": "Current role is not allowed to perform this action.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error404": {
+        "description": "Record missing or hidden because the caller cannot access it.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error409": {
+        "description": "Conflict: duplicate account, frozen account, insufficient balance, balance overflow, or conflicting idempotency key.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error422": {
+        "description": "Invalid input. Field errors are returned under errors.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ValidationError"
+            }
+          }
+        }
+      },
+      "Error429": {
+        "description": "Too many requests. Wait before retrying.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  }
+}
