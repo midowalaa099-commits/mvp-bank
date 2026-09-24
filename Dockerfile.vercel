@@ -18,6 +18,7 @@ COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-interaction --no-progress --no-scripts --optimize-autoloader --prefer-dist
 COPY . .
 RUN mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && rm -f bootstrap/cache/*.php \
     && composer dump-autoload --no-dev --classmap-authoritative
 COPY --from=frontend /app/public/build ./public/build
 
